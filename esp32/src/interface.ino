@@ -19,6 +19,8 @@ int SW = 16;
 // button
 int button = 19;
 bool lastButton = HIGH;
+unsigned long lastButtonTime = 0;
+const unsigned long debounceTime = 50;
 
 //temp
 int lastCLK;
@@ -64,6 +66,7 @@ void setup() {
   pinMode(SW, INPUT_PULLUP);
   pinMode(button, INPUT_PULLUP);
   lastCLK = digitalRead(CLK);
+  lastButton = digitalRead(button);
 
   tft.initR(INITR_144GREENTAB);
 
@@ -241,13 +244,36 @@ void loop() {
         }
 
       dirty = true;
-  }
       }
+    }
   }
   lastCLK = currentCLK;
  }
   
-
+  int currentButton = digitalRead(button);
+  if (currentButton != lastButton){
+    if (millis() - lastButtonTime > debounceTime) {
+      lastButton = currentButton;
+      lastButtonTime = millis();
+      
+      if(currentButton == LOW){
+        if (selected == 0){
+          Serial.println("Frequency pressed");
+        }
+        if (selected == 1){
+          Serial.println("Volume pressed");
+        }
+        if (selected == 2){
+          Serial.println("Mode pressed");
+        }
+        if (selected == 3){
+          Serial.println("Start pressed");
+        }
+      }
+    }
+    
+    lastButton = currentButton;
+  }
   // overpass prevention for mode 
   if (screen == MODE){
     if (selected >= modeItemsCount){
