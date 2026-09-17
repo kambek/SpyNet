@@ -25,6 +25,7 @@ const unsigned long debounceTime = 50;
 //temp
 int lastCLK;
 int lastSWButton = HIGH;
+int lastEncoderState;
 
 int selected;
 
@@ -67,6 +68,7 @@ void setup() {
   pinMode(button, INPUT_PULLUP);
   lastCLK = digitalRead(CLK);
   lastButton = digitalRead(button);
+
 
   tft.initR(INITR_144GREENTAB);
 
@@ -194,7 +196,7 @@ void drawMode(){
       tft.setTextColor(ST77XX_WHITE);
     }
     else{
-      tft.setTextColor(ST77XX_BLACK);
+      tft.setTextColor(ST77XX_WHITE);
 
     }
     tft.setCursor(8, y + 2);
@@ -229,9 +231,11 @@ void loop() {
 
       if (digitalRead(DT) != currentCLK){
         selected++;
+        dirty = true;
       }
       else {
         selected--;
+        dirty = true;
       } 
       // overpass prevention for main
       if (screen == MAIN){
@@ -246,6 +250,15 @@ void loop() {
       dirty = true;
       }
     }
+    if (screen == EDIT && selected == 0){
+      if(digitalRead(DT) != currentCLK){
+        radio.freq += 100000;
+      }
+      else {
+        radio.freq -= 100000;
+      }
+      dirty = true;
+    }
   }
   lastCLK = currentCLK;
  }
@@ -257,22 +270,65 @@ void loop() {
       lastButtonTime = millis();
       
       if(currentButton == LOW){
-        if (selected == 0){
-          Serial.println("Frequency pressed");
+        if(screen==MAIN){
+          if (selected == 0){
+            screen = EDIT;
+            selected = 0;
+            dirty = true;
+          }
+          if (selected == 1){
+            Serial.println("Volume pressed");
+          }
+          if (selected == 2){
+            screen = MODE;
+            selected = 0;
+            dirty = true;
+          }
+          if (selected == 3){
+            Serial.println("Start pressed");
+          }
         }
-        if (selected == 1){
-          Serial.println("Volume pressed");
+        else if (screen == MODE){
+          if (selected == 0){
+            sendCommand("MODE", modeItems[selected]);
+            screen = MAIN;
+            dirty = true;
+          }
+          if (selected == 1){
+            sendCommand("MODE", modeItems[selected]);
+            screen = MAIN;
+            dirty = true;
+          }
+          if (selected == 2){
+            sendCommand("MODE", modeItems[selected]);
+            screen = MAIN;
+            dirty = true;
+          }
+          if (selected == 3){
+            sendCommand("MODE", modeItems[selected]);
+            screen = MAIN;
+            dirty = true;
+          }
+          if (selected == 4){
+            sendCommand("MODE", modeItems[selected]);
+            screen = MAIN;
+            dirty = true;
+          }
+          if (selected == 5){
+            sendCommand("MODE", modeItems[selected]);
+            screen = MAIN;
+            dirty = true;
+          }
         }
-        if (selected == 2){
-          Serial.println("Mode pressed");
-        }
-        if (selected == 3){
-          Serial.println("Start pressed");
+        else if (screen == EDIT){
+          sendCommand("FREQ", String(radio.freq));
+          screen = MAIN;
+          selected = 0;
+          dirty = true;
         }
       }
     }
     
-    lastButton = currentButton;
   }
   // overpass prevention for mode 
   if (screen == MODE){
