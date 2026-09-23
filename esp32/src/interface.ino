@@ -1,7 +1,7 @@
 // SPYNET. lowercase intentional. original project. 
 
 bool dirty = true;
-
+// change the start/stop on the main screen
 // dirty is a variable to refresh the screen. 
 
 #include <Adafruit_GFX.h>
@@ -25,7 +25,8 @@ const unsigned long debounceTime = 50;
 //temp
 int lastCLK;
 int lastSWButton = HIGH;
-int lastEncoderState;
+unsigned long lastEncoderTime = 0;
+const unsigned long encoderDebounce = 20;
 
 int selected;
 
@@ -61,6 +62,7 @@ void sendStop(){
   }
 }
 
+
 void setup() {
   pinMode(CLK, INPUT_PULLUP);
   pinMode(DT, INPUT_PULLUP);
@@ -94,7 +96,9 @@ radioState radio;
 const char* mainItems[] = {
   "frequency",
   "volume",
-  "mode"
+  "mode",
+  "start",
+  "experiment"
 };
 
 // all modes for mode scrn
@@ -103,19 +107,47 @@ const char* modeItems [] = {
   "AM",
   "SW",
   "ATC",
-  "Marine",
+  "AIS",
   "ADS-B"
 };
 
+void defaultFrequency(){
+  if(radio.mode == "FM"){
+    radio.freq = 100400000;
+  }
+    if (radio.mode == "AM") {
+    radio.freq = 999000;
+  }
+
+  if (radio.mode == "SW") {
+    radio.freq = 7100000;
+  }
+
+  if (radio.mode == "ATC") {
+    radio.freq = 120800000;
+  }
+
+  if (radio.mode == "Marine") {
+    radio.freq = 156800000;
+  }
+
+  if (radio.mode == "ADS-B") {
+    radio.freq = 1090000000;
+  }
+}
+
+
 // variables for max items / encoder calc
-const int mainItemsCount = 4;
+const int mainItemsCount = 5;
 const int modeItemsCount = 6;
 
 // three modes 
 enum Screen {
   MAIN, 
   EDIT, 
-  MODE
+  MODE,
+  EXPERIMENT,
+  VOLUME
 };
 // this is all rendering don't touch
 Screen screen = MAIN;
@@ -126,56 +158,68 @@ void render() {
     drawMain();
     break;
 
-    case MODE:
-    //drawMenu(); 
+    case MODE: 
     drawMode();
     break;
 
     case EDIT:
-    //drawFreq();
     drawEdit();
     break;
 
+    case EXPERIMENT:
+    drawExperiment();
+    break; 
+
+    case VOLUME:
+    drawVolume();
+    break;
   }
 }
 
 
 // draws the main screen (arrow included) dont touch coords!
 void drawMain(){
+  if (selected >= mainItemsCount) {
+    selected = 0;
+  }
+  if (selected < 0){
+    selected = mainItemsCount - 1;
+  }
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextColor(ST77XX_WHITE);
 
   tft.setTextSize(2);
-  tft.setCursor(8,35);
+  tft.setCursor(8,15);
   tft.print(radio.freq / 1000000.0 , 3);
   tft.setTextSize(1);
   tft.print(" mHz");
-
-  tft.setCursor(98, 45);
+  tft.setCursor(98, 25);
   tft.setTextSize(1);
   tft.print(radio.mode);
 
-  tft.setCursor(10, 60);
+  tft.setCursor(10, 40);
   tft.setTextSize(1);
   tft.print("frequency");
 
-  tft.setCursor(10, 75);
+  tft.setCursor(10, 55);
   tft.setTextSize(1);
   tft.print("volume");
 
-  tft.setCursor(10, 90);
+  tft.setCursor(10, 70);
   tft.setTextSize(1);
   tft.print("mode");
   
-  tft.setCursor(10, 105);
+  tft.setCursor(10, 85);
   if (playing == false){ 
       tft.print("start");
   }
   else {
     tft.print("stop");
   }
+  tft.setCursor(10, 100);
+  tft.print("experiment");
 
-  tft.setCursor(2, 60 + selected * 15);
+  tft.setCursor(2, 40 + selected * 15);
   tft.print(">");
 }
 
@@ -219,50 +263,119 @@ void drawEdit(){
   tft.println("MHz.");
 }
 
+void drawExperiment(){
+  tft.fillScreen(ST77XX_BLACK);
 
+  tft.setTextColor(ST77XX_WHITE);
+
+  tft.setTextSize(1);
+  tft.setCursor(5,5);
+  tft.print("experiment");
+
+  tft.setTextSize(2);
+  tft.setCursor(5, 35);
+  tft.print(radio.freq / 1000000.0, 3);
+  
+  tft.setTextSize(1);
+  tft.setCursor(5, 60);
+  tft.print("MHz");
+
+  tft.setCursor(5, 80);
+  tft.print("MODE: ");
+  tft.print(radio.mode);
+
+  tft.setCursor(5, 110);
+  tft.print("press button to exit");
+
+}
+
+void drawVolume(){
+  tft.fillScreen(ST77XX_BLACK);
+  tft.setTextColor(ST77XX_WHITE);
+  tft.setCursor(27, 15);
+  tft.setTextSize(2);
+  tft.print("volume");
+  if(radio.volume != 100 && radio.volume != 0){
+    tft.setCursor(40, 50);
+    tft.setTextSize(4);
+    tft.print(radio.volume);
+  }
+  if(radio.volume == 100){
+    tft.setTextSize(4);
+    tft.setCursor(30, 50);
+    tft.print(radio.volume);
+  }
+  if(radio.volume == 0){
+    tft.setTextSize(4);
+    tft.setCursor(50,50);
+    tft.print(radio.volume);
+  }
+}
 
 void loop() {
   // encoder proccesing 
+
   int currentCLK = digitalRead(CLK);
   if (currentCLK != lastCLK){
-    if (currentCLK == LOW){
-      // if screen == mode/main we increment selected to move arrow
-      if (screen == MODE || screen == MAIN){
+    if (millis() - lastEncoderTime >= encoderDebounce){
+      if (currentCLK == LOW){
+        // if screen == mode/main we increment selected to move arrow
+        if (screen == MODE || screen == MAIN){
 
-      if (digitalRead(DT) != currentCLK){
-        selected++;
+        if (digitalRead(DT) != currentCLK){
+          selected++;
+          dirty = true;
+        }
+        else {
+          selected--;
+          dirty = true;
+        } 
+        // overpass prevention for main
+        if (screen == MAIN){
+          if (selected >= mainItemsCount){
+            selected = 0;
+          }
+
+          if (selected < 0){
+            selected = mainItemsCount - 1;
+          }
+
+        dirty = true;
+        }
+      }
+      if (screen == EDIT && selected == 0){
+        if(digitalRead(DT) != currentCLK){
+          radio.freq += 100000;
+        }
+        else {
+          radio.freq -= 100000;
+        }
         dirty = true;
       }
-      else {
-        selected--;
+      if (screen == EXPERIMENT) {
+        if (digitalRead(DT) != currentCLK) {
+          radio.freq += 100000;
+        }
+        else {
+          radio.freq -= 100000;
+        }
+        sendCommand("FREQ", String(radio.freq));
         dirty = true;
-      } 
-      // overpass prevention for main
-      if (screen == MAIN){
-        if (selected >= mainItemsCount){
-          selected = 0;
+      }
+      if (screen == VOLUME) {
+        if (digitalRead(DT) != currentCLK){
+          radio.volume += 10;
         }
-
-        if (selected < 0){
-          selected = mainItemsCount - 1;
+        else {
+          radio.volume -= 10;
         }
-
-      dirty = true;
+        dirty = true; 
       }
     }
-    if (screen == EDIT && selected == 0){
-      if(digitalRead(DT) != currentCLK){
-        radio.freq += 100000;
-      }
-      else {
-        radio.freq -= 100000;
-      }
-      dirty = true;
+    lastCLK = currentCLK;
     }
   }
-  lastCLK = currentCLK;
- }
-  
+    
   int currentButton = digitalRead(button);
   if (currentButton != lastButton){
     if (millis() - lastButtonTime > debounceTime) {
@@ -277,7 +390,9 @@ void loop() {
             dirty = true;
           }
           if (selected == 1){
-            Serial.println("Volume pressed");
+            screen = VOLUME;
+            selected = 0;
+            dirty = true;
           }
           if (selected == 2){
             screen = MODE;
@@ -285,7 +400,14 @@ void loop() {
             dirty = true;
           }
           if (selected == 3){
-            Serial.println("Start pressed");
+            screen = MODE;
+            selected = 0;
+            dirty = true;
+          }
+          if (selected == 4){
+            screen = EXPERIMENT;
+            selected = 0;
+            dirty = true;
           }
         }
         else if (screen == MODE){
@@ -293,31 +415,43 @@ void loop() {
             sendCommand("MODE", modeItems[selected]);
             screen = MAIN;
             dirty = true;
+            radio.mode = modeItems[selected];
+            defaultFrequency();
           }
           if (selected == 1){
             sendCommand("MODE", modeItems[selected]);
             screen = MAIN;
             dirty = true;
+            radio.mode = modeItems[selected];
+            defaultFrequency();
           }
           if (selected == 2){
             sendCommand("MODE", modeItems[selected]);
             screen = MAIN;
             dirty = true;
+            radio.mode = modeItems[selected];
+            defaultFrequency();
           }
           if (selected == 3){
             sendCommand("MODE", modeItems[selected]);
             screen = MAIN;
             dirty = true;
+            radio.mode = modeItems[selected];
+            defaultFrequency();
           }
           if (selected == 4){
             sendCommand("MODE", modeItems[selected]);
             screen = MAIN;
             dirty = true;
+            radio.mode = modeItems[selected];
+            defaultFrequency();
           }
           if (selected == 5){
             sendCommand("MODE", modeItems[selected]);
             screen = MAIN;
             dirty = true;
+            radio.mode = modeItems[selected];
+            defaultFrequency();
           }
         }
         else if (screen == EDIT){
@@ -325,6 +459,17 @@ void loop() {
           screen = MAIN;
           selected = 0;
           dirty = true;
+        }
+        else if (screen == EXPERIMENT){
+          screen = MAIN;
+          selected = 0;
+          dirty = true; 
+        }
+        else if (screen == VOLUME){
+          sendCommand("VOL", String(radio.volume));
+          screen = MAIN;
+          selected = 0;
+          dirty = true; 
         }
       }
     }
@@ -339,12 +484,21 @@ void loop() {
       selected = modeItemsCount - 1;
     }
   }
+  if (screen == VOLUME){
+    if (radio.volume <= 0){
+      radio.volume = 0;
+    }
+    if (radio.volume >= 100){
+      radio.volume = 100;
+    }
+  }
   
   // doesn't work in the current version but used in edit to edit freq
   if (currentCLK != lastCLK){
     if (screen == EDIT && selected == 0){
       if (digitalRead(DT) != currentCLK) {
         radio.freq += 100000;
+        
       }
       else {
         radio.freq -= 100000;
@@ -431,4 +585,5 @@ void loop() {
     render();
     dirty = false;
   }
+  
 }
