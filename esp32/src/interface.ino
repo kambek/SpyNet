@@ -22,6 +22,9 @@ bool lastButton = HIGH;
 unsigned long lastButtonTime = 0;
 const unsigned long debounceTime = 50;
 
+// changed when radio starts/stops 
+bool playingState = LOW;
+
 //temp
 int lastCLK;
 int lastSWButton = HIGH;
@@ -35,7 +38,6 @@ int selected;
 Adafruit_ST7735 tft(TFT_CS, TFT_DC, TFT_RST);
 
 // changed when radio confirmed 
-bool playing = false;
 
 
 // main protocol. sending cmds to python to change settings
@@ -48,18 +50,12 @@ void sendCommand(String command, String value){
 
 // to start audio
 void sendStart(){
-  if(playing== false){
     Serial.println("$START");
-    
-  }
 }
 
 // to stop audio
 void sendStop(){
-  if(playing==true){
     Serial.println("$STOP");
-    
-  }
 }
 
 
@@ -94,10 +90,10 @@ radioState radio;
 
 // items in main 
 const char* mainItems[] = {
-  "frequency",
+  "start",
   "volume",
   "mode",
-  "start",
+  "frequency",
   "experiment"
 };
 
@@ -127,7 +123,7 @@ void defaultFrequency(){
     radio.freq = 120800000;
   }
 
-  if (radio.mode == "Marine") {
+  if (radio.mode == "AIS") {
     radio.freq = 156800000;
   }
 
@@ -196,10 +192,16 @@ void drawMain(){
   tft.setCursor(98, 25);
   tft.setTextSize(1);
   tft.print(radio.mode);
-
+  
   tft.setCursor(10, 40);
   tft.setTextSize(1);
-  tft.print("frequency");
+  if (playingState == LOW){ 
+      tft.print("start");
+  }
+  else if (playingState == HIGH) {
+    tft.print("stop");
+  }
+  
 
   tft.setCursor(10, 55);
   tft.setTextSize(1);
@@ -210,12 +212,8 @@ void drawMain(){
   tft.print("mode");
   
   tft.setCursor(10, 85);
-  if (playing == false){ 
-      tft.print("start");
-  }
-  else {
-    tft.print("stop");
-  }
+  tft.print("frequency");
+
   tft.setCursor(10, 100);
   tft.print("experiment");
 
@@ -385,9 +383,21 @@ void loop() {
       if(currentButton == LOW){
         if(screen==MAIN){
           if (selected == 0){
-            screen = EDIT;
+            if (playingState == LOW){
+              sendCommand("FREQ", String(radio.freq));
+              sendCommand("MODE", radio.mode);
+              sendCommand("VOL", String(radio.volume));
+              sendStart();
+              playingState = HIGH;
+            }
+            else {
+              sendStop();
+              playingState = LOW;
+            }
+            screen = MAIN;
             selected = 0;
             dirty = true;
+            
           }
           if (selected == 1){
             screen = VOLUME;
@@ -400,7 +410,7 @@ void loop() {
             dirty = true;
           }
           if (selected == 3){
-            screen = MODE;
+            screen = EDIT;
             selected = 0;
             dirty = true;
           }
@@ -413,45 +423,57 @@ void loop() {
         else if (screen == MODE){
           if (selected == 0){
             sendCommand("MODE", modeItems[selected]);
-            screen = MAIN;
-            dirty = true;
             radio.mode = modeItems[selected];
             defaultFrequency();
+            sendCommand("FREQ", String(radio.freq));
+
+            screen = MAIN;
+            dirty = true;
           }
           if (selected == 1){
             sendCommand("MODE", modeItems[selected]);
-            screen = MAIN;
-            dirty = true;
             radio.mode = modeItems[selected];
             defaultFrequency();
+            sendCommand("FREQ", String(radio.freq));
+
+            screen = MAIN;
+            dirty = true;
           }
           if (selected == 2){
             sendCommand("MODE", modeItems[selected]);
-            screen = MAIN;
-            dirty = true;
             radio.mode = modeItems[selected];
             defaultFrequency();
+            sendCommand("FREQ", String(radio.freq));
+
+            screen = MAIN;
+            dirty = true;
           }
           if (selected == 3){
             sendCommand("MODE", modeItems[selected]);
-            screen = MAIN;
-            dirty = true;
             radio.mode = modeItems[selected];
             defaultFrequency();
+            sendCommand("FREQ", String(radio.freq));
+
+            screen = MAIN;
+            dirty = true;
           }
           if (selected == 4){
             sendCommand("MODE", modeItems[selected]);
-            screen = MAIN;
-            dirty = true;
             radio.mode = modeItems[selected];
             defaultFrequency();
+            sendCommand("FREQ", String(radio.freq));
+
+            screen = MAIN;
+            dirty = true;
           }
           if (selected == 5){
             sendCommand("MODE", modeItems[selected]);
-            screen = MAIN;
-            dirty = true;
             radio.mode = modeItems[selected];
             defaultFrequency();
+            sendCommand("FREQ", String(radio.freq));
+
+            screen = MAIN;
+            dirty = true;
           }
         }
         else if (screen == EDIT){
@@ -511,38 +533,6 @@ void loop() {
   if (Serial.available()){
     String msg = Serial.readStringUntil('\n');
     msg.trim();
-  // confirm init 
-    if (msg=="$HELLO"){
-      Serial.println("$OK, HELLO");
-  }
-  // after confirm update screen
-    if (msg.startsWith("$OK,FREQ,")) {
-      String value = msg.substring(9);
-      radio.freq = value.toInt();
-      dirty = true;
-    }
-
-    if (msg.startsWith("$OK,MODE,")) {
-      String value = msg.substring(9);
-      radio.mode = value;
-      dirty = true;
-    }
-
-    if (msg.startsWith("$OK,VOL,")) {
-      String value = msg.substring(8);
-      radio.volume = value.toInt();
-      dirty = true;
-    }
-
-    if (msg == "$OK,START") {
-      playing = true;
-      dirty = true;
-    }
-
-    if (msg == "$OK,STOP") {
-      playing = false;
-      dirty = true;
-    }
   // asking for current state 
     if(msg.startsWith("$STATE,FREQ,")){
       String value = msg.substring(11); 
@@ -570,7 +560,7 @@ void loop() {
 
     if (msg.startsWith("$STATE,PLAYING,")){
       String value = msg.substring(15);
-      playing = value.toInt();
+      playingState = value.toInt();
       dirty = true;
     }
   // troubleshooting 
