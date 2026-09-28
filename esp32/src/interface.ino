@@ -132,6 +132,35 @@ void defaultFrequency(){
   }
 }
 
+int getMinFreq(){
+  if (radio.mode == "FM") return 87500000;
+  if (radio.mode == "AM") return 531000;
+  if (radio.mode == "SW") return 100000;
+  if (radio.mode == "ATC") return 118000000;
+  if (radio.mode == "AIS") return 156000000;
+  if (radio.mode == "ADS-B") return 1090000000;
+
+  return 0;
+}
+
+int getMaxFreq(){
+  if (radio.mode == "FM") return 108000000;
+  if (radio.mode == "AM") return 1602000;
+  if (radio.mode == "SW") return 30000000;
+  if (radio.mode == "ATC") return 137000000;
+  if (radio.mode == "AIS") return 162000000;
+  if (radio.mode == "ADS-B") return 1090000000;
+
+  return 0;
+}
+
+int steps(){
+  if (radio.mode == "FM") return 100000;
+  if (radio.mode == "AM") return 10000;
+  if (radio.mode == "SW") return 5000;
+  if (radio.mode == "ATC") return 10000;
+  if (radio.mode == "AIS") return 25000;
+}
 
 // variables for max items / encoder calc
 const int mainItemsCount = 5;
@@ -250,15 +279,17 @@ void drawEdit(){
   tft.fillScreen(ST77XX_BLACK);
 
   tft.setTextColor(ST77XX_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(2, 5);
-  tft.println("FREQ");
+  tft.setTextSize(1);
+  tft.setCursor(18, 45);
+  tft.println("freq");
 
-  tft.setCursor(5, 40);
+  tft.setTextSize(2);
+  tft.setCursor(20, 60);
   tft.print(radio.freq / 1000000.0, 3);
 
-  tft.setCursor(5, 60);
-  tft.println("MHz.");
+  tft.setTextSize(1);
+  tft.setCursor(90, 80);
+  tft.println("mhz");
 }
 
 void drawExperiment(){
@@ -267,24 +298,20 @@ void drawExperiment(){
   tft.setTextColor(ST77XX_WHITE);
 
   tft.setTextSize(1);
-  tft.setCursor(5,5);
-  tft.print("experiment");
+  tft.setCursor(20, 45);
+  tft.println("experiment");
 
   tft.setTextSize(2);
-  tft.setCursor(5, 35);
+  tft.setCursor(20, 60);
   tft.print(radio.freq / 1000000.0, 3);
   
   tft.setTextSize(1);
-  tft.setCursor(5, 60);
-  tft.print("MHz");
+  tft.setCursor(70, 80);
+  tft.print("mhz");
 
-  tft.setCursor(5, 80);
-  tft.print("MODE: ");
+  tft.setCursor(20, 80);
+  tft.print("mode: ");
   tft.print(radio.mode);
-
-  tft.setCursor(5, 110);
-  tft.print("press button to exit");
-
 }
 
 void drawVolume(){
@@ -343,19 +370,31 @@ void loop() {
       }
       if (screen == EDIT && selected == 0){
         if(digitalRead(DT) != currentCLK){
-          radio.freq += 100000;
+          radio.freq += steps();
+          if (radio.freq >= getMaxFreq()){
+            radio.freq = getMaxFreq();
+          }
         }
         else {
-          radio.freq -= 100000;
+          radio.freq -= steps();
+          if (radio.freq <= getMinFreq()){
+            radio.freq = getMinFreq();
+          }
         }
         dirty = true;
       }
       if (screen == EXPERIMENT) {
         if (digitalRead(DT) != currentCLK) {
-          radio.freq += 100000;
+          radio.freq += steps();
+          if(radio.freq >= getMaxFreq()){
+            radio.freq = getMaxFreq();
+          }
         }
         else {
-          radio.freq -= 100000;
+          radio.freq -= steps();
+          if(radio.freq <= getMinFreq()){
+            radio.freq = getMinFreq();
+          }
         }
         sendCommand("FREQ", String(radio.freq));
         dirty = true;
@@ -514,21 +553,8 @@ void loop() {
       radio.volume = 100;
     }
   }
+
   
-  // doesn't work in the current version but used in edit to edit freq
-  if (currentCLK != lastCLK){
-    if (screen == EDIT && selected == 0){
-      if (digitalRead(DT) != currentCLK) {
-        radio.freq += 100000;
-        
-      }
-      else {
-        radio.freq -= 100000;
-      }
-    }
-  
-    dirty = true; 
-  }
   // protocol works here. done through serial/uart. 
   if (Serial.available()){
     String msg = Serial.readStringUntil('\n');
